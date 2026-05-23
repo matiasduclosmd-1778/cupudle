@@ -274,10 +274,9 @@
     .row   { display: flex; gap: 7px; }
 
     .tile {
-      width: clamp(46px, 10.5vw, 58px); height: clamp(46px, 10.5vw, 58px);
       border: 2px solid var(--border); border-radius: var(--radius);
       display: flex; align-items: center; justify-content: center;
-      font-size: clamp(1.2rem, 3.5vw, 1.6rem); font-weight: 800;
+      font-size: clamp(1.1rem, 3.5vw, 1.5rem); font-weight: 800;
       text-transform: uppercase; background: var(--surface);
       user-select: none; transform-style: preserve-3d; transition: border-color 0.1s;
     }
@@ -321,6 +320,45 @@
     .key.correct { background: var(--correct); color: #0a1a10; }
     .key.present { background: var(--present); color: #1a1200; }
     .key.absent  { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.22); }
+
+    /* ── ALREADY WON PANEL ────────────────────────────────────── */
+    #already-won-panel {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 12px;
+    }
+    .won-card {
+      background: linear-gradient(145deg, rgba(124,58,237,0.15), rgba(37,99,235,0.1));
+      border: 1px solid rgba(124,58,237,0.3);
+      border-radius: 24px;
+      padding: 36px 32px;
+      text-align: center;
+      width: min(360px, 100%);
+    }
+    .won-emoji { font-size: 3rem; margin-bottom: 12px; }
+    .won-title { font-size: 1.3rem; font-weight: 800; margin-bottom: 20px; }
+    .won-label {
+      font-size: 0.68rem; color: rgba(255,255,255,0.38);
+      letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 6px;
+    }
+    #won-word {
+      font-size: 2rem; font-weight: 800; letter-spacing: 0.3em;
+      background: linear-gradient(100deg, #c084fc, #60a5fa);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      margin-bottom: 24px;
+    }
+    .won-countdown-label {
+      font-size: 0.68rem; color: rgba(255,255,255,0.38);
+      letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 8px;
+    }
+    #countdown-timer {
+      font-size: 1.8rem; font-weight: 800;
+      font-variant-numeric: tabular-nums; letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.85);
+    }
 
     /* ── MODAL ────────────────────────────────────────────────── */
     #modal {
@@ -374,7 +412,7 @@
 <div id="auth-screen">
   <div class="auth-card">
     <div class="auth-logo">CUPUDLE</div>
-    <p class="auth-tagline">Adivina la palabra de 6 letras</p>
+    <p class="auth-tagline">Adivina la palabra del día</p>
 
     <div class="auth-title" id="auth-title">Crear cuenta</div>
     <div class="auth-error" id="auth-error"></div>
@@ -409,7 +447,7 @@
     </div>
     <div class="header-center">
       <h1>CUPUDLE</h1>
-      <p class="subtitle">6 letras · 6 intentos</p>
+      <p class="subtitle" id="game-subtitle">· · ·</p>
     </div>
     <button class="logout-btn" onclick="logout()" title="Cerrar sesión">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -467,6 +505,18 @@
           <button class="key wide" data-key="BACKSPACE">⌫</button>
         </div>
       </div>
+
+      <!-- Shown instead of board+keyboard when user already won today -->
+      <div id="already-won-panel">
+        <div class="won-card">
+          <div class="won-emoji">🏆</div>
+          <div class="won-title">¡Ya ganaste!</div>
+          <div class="won-label">La palabra era</div>
+          <div id="won-word"></div>
+          <div class="won-countdown-label">Próxima palabra en</div>
+          <div id="countdown-timer">--:--:--</div>
+        </div>
+      </div>
     </div>
 
     <!-- RANKING -->
@@ -487,8 +537,8 @@
       <div class="modal-icon"  id="m-icon">🎉</div>
       <div class="modal-title" id="m-title">¡Ganaste!</div>
       <div class="modal-desc"  id="m-desc">La palabra era</div>
-      <div class="modal-word">FABULA</div>
-      <button class="modal-btn" id="m-btn">Jugar de nuevo</button>
+      <div class="modal-word"  id="m-word"></div>
+      <button class="modal-btn" id="m-btn">Ver ranking</button>
     </div>
   </div>
 
@@ -500,10 +550,10 @@
 const TOKEN_KEY = 'cupudle_token';
 const USER_KEY  = 'cupudle_user';
 
-const getToken   = ()  => localStorage.getItem(TOKEN_KEY);
-const getStoredUser = () => localStorage.getItem(USER_KEY);
-const saveToken  = (t, u) => { localStorage.setItem(TOKEN_KEY, t); localStorage.setItem(USER_KEY, u); };
-const clearToken = ()  => { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); };
+const getToken      = ()      => localStorage.getItem(TOKEN_KEY);
+const getStoredUser = ()      => localStorage.getItem(USER_KEY);
+const saveToken     = (t, u)  => { localStorage.setItem(TOKEN_KEY, t); localStorage.setItem(USER_KEY, u); };
+const clearToken    = ()      => { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); };
 
 function authHeaders() {
   return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` };
@@ -574,6 +624,8 @@ document.getElementById('auth-form').addEventListener('submit', async e => {
 function logout() {
   clearToken();
   currentUser = '';
+  clearInterval(wordCheckInterval);
+  clearInterval(countdownInterval);
   document.getElementById('game-screen').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('auth-username').value = '';
@@ -582,14 +634,88 @@ function logout() {
   if (authMode !== 'register') toggleAuthMode();
 }
 
+// ── GAME STATE ────────────────────────────────────────────────────────
+
+let TARGET           = '';
+let COLS             = 0;
+const MAX_ROWS       = 6;
+let nextWordAt       = 0;
+let currentWordIndex = -1;
+let wordCheckInterval = null;
+let countdownInterval = null;
+
+// ── ENTER GAME ────────────────────────────────────────────────────────
+
 async function enterGame(username) {
   currentUser = username;
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('game-screen').style.display = 'flex';
   document.getElementById('player-avatar').textContent = username[0].toUpperCase();
   document.getElementById('player-name').textContent   = username;
-  await refreshRankings();
-  reset();
+
+  try {
+    const status     = await apiCall('GET', '/api/status');
+    TARGET           = status.word.toUpperCase();
+    COLS             = TARGET.length;
+    currentWordIndex = status.wordIndex;
+    nextWordAt       = status.nextWordAt;
+
+    await refreshRankings();
+    startWordChangeCheck();
+
+    if (status.alreadyWon) {
+      showAlreadyWon();
+    } else {
+      initGame();
+    }
+  } catch (err) {
+    toast('Error al cargar: ' + err.message);
+  }
+}
+
+// ── ALREADY WON PANEL ────────────────────────────────────────────────
+
+function showAlreadyWon() {
+  clearInterval(countdownInterval);
+  document.getElementById('board-wrap').style.display        = 'none';
+  document.getElementById('keyboard').style.display          = 'none';
+  document.getElementById('already-won-panel').style.display = 'flex';
+  document.getElementById('won-word').textContent            = TARGET;
+  startCountdown();
+}
+
+function startCountdown() {
+  updateCountdown();
+  countdownInterval = setInterval(updateCountdown, 1000);
+}
+
+function updateCountdown() {
+  const remaining = nextWordAt - Date.now();
+  if (remaining <= 0) {
+    document.getElementById('countdown-timer').textContent = '¡Nueva palabra!';
+    clearInterval(countdownInterval);
+    return;
+  }
+  const h = Math.floor(remaining / 3600000);
+  const m = Math.floor((remaining % 3600000) / 60000);
+  const s = Math.floor((remaining % 60000) / 1000);
+  document.getElementById('countdown-timer').textContent =
+    `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function startWordChangeCheck() {
+  clearInterval(wordCheckInterval);
+  wordCheckInterval = setInterval(async () => {
+    try {
+      const status = await apiCall('GET', '/api/status');
+      if (status.wordIndex !== currentWordIndex) {
+        clearInterval(wordCheckInterval);
+        clearInterval(countdownInterval);
+        toast('¡Nueva palabra disponible!', 3000);
+        setTimeout(() => enterGame(currentUser), 2000);
+      }
+    } catch (_) {}
+  }, 60000);
 }
 
 // ── RANKING ──────────────────────────────────────────────────────────
@@ -610,8 +736,8 @@ async function recordWin(attempts) {
   }
 }
 
-const MEDALS       = ['🥇', '🥈', '🥉'];
-const MEDAL_CLASS  = ['gold', 'silver', 'bronze'];
+const MEDALS      = ['🥇', '🥈', '🥉'];
+const MEDAL_CLASS = ['gold', 'silver', 'bronze'];
 
 function renderRanking(rankings, highlightUser) {
   const list = document.getElementById('rank-list');
@@ -649,10 +775,6 @@ function renderRanking(rankings, highlightUser) {
 
 // ── GAME ──────────────────────────────────────────────────────────────
 
-const TARGET   = 'FABULA';
-const COLS     = TARGET.length;
-const MAX_ROWS = 6;
-
 let grid   = [];
 let curRow = 0;
 let curCol = 0;
@@ -663,10 +785,31 @@ function isGameActive() {
   return document.getElementById('game-screen').style.display === 'flex';
 }
 
+function initGame() {
+  closeModal();
+  curRow = 0; curCol = 0; guess = []; locked = false;
+  document.querySelectorAll('.key').forEach(k => k.classList.remove('correct', 'present', 'absent'));
+  document.getElementById('board-wrap').style.display        = 'flex';
+  document.getElementById('keyboard').style.display          = 'flex';
+  document.getElementById('already-won-panel').style.display = 'none';
+  document.getElementById('game-subtitle').textContent       = `${COLS} letras · ${MAX_ROWS} intentos`;
+  buildBoard();
+}
+
+function tileSize(cols) {
+  if (cols <= 5) return 58;
+  if (cols <= 6) return 54;
+  if (cols <= 7) return 48;
+  if (cols <= 8) return 42;
+  return 36;
+}
+
 function buildBoard() {
   const board = document.getElementById('board');
   board.innerHTML = '';
   grid = [];
+  const sz = tileSize(COLS);
+  const fs = COLS >= 9 ? '0.9rem' : COLS >= 7 ? '1.1rem' : '';
   for (let r = 0; r < MAX_ROWS; r++) {
     const rowEl = document.createElement('div');
     rowEl.className = 'row';
@@ -676,6 +819,9 @@ function buildBoard() {
       const tile = document.createElement('div');
       tile.className = 'tile';
       tile.id = `tile-${r}-${c}`;
+      tile.style.width  = sz + 'px';
+      tile.style.height = sz + 'px';
+      if (fs) tile.style.fontSize = fs;
       rowEl.appendChild(tile);
       rowData.push({ el: tile });
     }
@@ -767,7 +913,7 @@ function updateKey(letter, state) {
   }
 }
 
-const WIN_MSGS = ['¡Increíble!','¡Excelente!','¡Brillante!','¡Muy bien!','¡Bien!','¡Uf, por poco!'];
+const WIN_MSGS = ['¡Increíble!', '¡Excelente!', '¡Brillante!', '¡Muy bien!', '¡Bien!', '¡Uf, por poco!'];
 
 function winGame(row) {
   const attempts = row + 1;
@@ -782,6 +928,9 @@ function winGame(row) {
     document.getElementById('m-icon').textContent  = '🎉';
     document.getElementById('m-title').textContent = '¡Ganaste!';
     document.getElementById('m-desc').textContent  = WIN_MSGS[Math.min(row, WIN_MSGS.length - 1)];
+    document.getElementById('m-word').textContent  = TARGET;
+    document.getElementById('m-btn').textContent   = 'Ver ranking';
+    document.getElementById('m-btn').onclick       = () => { closeModal(); showAlreadyWon(); };
     openModal();
   }, 1400);
 }
@@ -791,6 +940,9 @@ function loseGame() {
     document.getElementById('m-icon').textContent  = '😔';
     document.getElementById('m-title').textContent = '¡Game Over!';
     document.getElementById('m-desc').textContent  = 'La palabra era';
+    document.getElementById('m-word').textContent  = TARGET;
+    document.getElementById('m-btn').textContent   = 'Intentar de nuevo';
+    document.getElementById('m-btn').onclick       = () => { closeModal(); initGame(); };
     openModal();
   }, 400);
 }
@@ -798,7 +950,7 @@ function loseGame() {
 function openModal()  { document.getElementById('modal').classList.add('open'); }
 function closeModal() { document.getElementById('modal').classList.remove('open'); }
 
-const CONFETTI_COLORS = ['#c084fc','#818cf8','#38bdf8','#4ade80','#fbbf24','#f87171','#fb7185'];
+const CONFETTI_COLORS = ['#c084fc', '#818cf8', '#38bdf8', '#4ade80', '#fbbf24', '#f87171', '#fb7185'];
 
 function launchConfetti() {
   for (let i = 0; i < 80; i++) {
@@ -833,13 +985,6 @@ function shake(row) {
   setTimeout(() => rowEl.classList.remove('shake'), 500);
 }
 
-function reset() {
-  closeModal();
-  curRow = 0; curCol = 0; guess = []; locked = false;
-  document.querySelectorAll('.key').forEach(k => k.classList.remove('correct','present','absent'));
-  buildBoard();
-}
-
 // ── EVENTS ────────────────────────────────────────────────────────────
 
 document.querySelectorAll('.key').forEach(btn => {
@@ -853,12 +998,10 @@ document.querySelectorAll('.key').forEach(btn => {
   });
 });
 
-document.getElementById('m-btn').addEventListener('click', reset);
-
 document.addEventListener('keydown', e => {
   if (!isGameActive()) return;
   if (document.getElementById('modal').classList.contains('open')) {
-    if (e.key === 'Enter') reset();
+    if (e.key === 'Enter') document.getElementById('m-btn').click();
     return;
   }
   const k = e.key.toUpperCase();
