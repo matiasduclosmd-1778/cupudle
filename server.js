@@ -9,7 +9,10 @@ const app        = express();
 const JWT_SECRET = process.env.JWT_SECRET || 'cupudle-dev-secret-change-in-prod';
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname)));
+// static files: Vercel los sirve directamente; esto solo aplica en desarrollo local
+if (process.env.NODE_ENV !== 'production') {
+  app.use(express.static(path.join(__dirname)));
+}
 
 // ── DB ────────────────────────────────────────────────────────────────
 
